@@ -1,0 +1,8 @@
+Fase,PB_min,EM_min,Ca_min,P_disp_min
+Pré-inicial,20.0,2850,0.90,0.42
+Inicial,19.5,2850,0.90,0.42
+Crescimento I,16.0,2750,0.85,0.36
+Crescimento II,15.5,2750,0.85,0.36
+Pré-postura,15.5,2750,1.50,0.40
+Postura I,16.0,2825,3.50,0.44
+Postura II,15.5,2825,3.80,0.44

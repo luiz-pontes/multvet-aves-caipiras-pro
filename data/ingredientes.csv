@@ -1,0 +1,11 @@
+ID,Ingrediente,Preco_kg,PB_pct,EM_kcal_kg,Ca_pct,P_disp_pct,Inclusao_min_pct,Inclusao_max_pct,Ativo
+1,Milho moído,1.20,8.50,3460,0.02,0.22,20,70,True
+2,Sorgo,1.10,9.00,3456,0.20,0.20,0,60,True
+3,Farelo de soja,2.40,45.00,2440,0.25,0.29,10,40,True
+4,Farelo de trigo,1.20,15.00,2500,0.42,0.55,0,20,True
+5,Farelo de arroz,1.30,15.60,2600,0.52,0.55,0,15,True
+6,Óleo de soja,5.50,0.00,8740,0.00,0.00,0,8,True
+7,Calcário calcítico,0.25,0.00,0,37.00,0.00,0,10,True
+8,Fosfato bicálcico,4.00,0.00,0,23.00,18.00,0,4,True
+9,Sal comum,0.80,0.00,0,0.00,0.00,0.2,0.6,True
+10,Núcleo para aves,8.00,0.00,0,0.00,0.00,0.5,2.0,True
