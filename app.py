@@ -215,7 +215,17 @@ with aba1:
         ativos[["Ingrediente", "Preco_kg", "PB_pct", "EM_kcal_kg", "Ca_pct", "P_disp_pct",
                 "Inclusao_min_pct", "Inclusao_max_pct"]],
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "Ingrediente": st.column_config.TextColumn("Ingrediente", width="medium"),
+            "Preco_kg": st.column_config.NumberColumn("R$/kg", width="small", format="%.2f"),
+            "PB_pct": st.column_config.NumberColumn("PB %", width="small"),
+            "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small"),
+            "Ca_pct": st.column_config.NumberColumn("Ca %", width="small"),
+            "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small"),
+            "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small"),
+            "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small"),
+        }
     )
 
     st.info(
@@ -303,28 +313,39 @@ with aba2:
         "Você também pode acrescentar ingredientes."
     )
 
-    edited = st.data_editor(
-        st.session_state.ingredientes,
-        use_container_width=True,
-        num_rows="dynamic",
-        column_config={
-            "Ativo": st.column_config.CheckboxColumn("Ativo"),
-            "Preco_kg": st.column_config.NumberColumn("Preço/kg", min_value=0.0, format="R$ %.2f"),
-            "PB_pct": st.column_config.NumberColumn("PB (%)", min_value=0.0),
-            "EM_kcal_kg": st.column_config.NumberColumn("EM (kcal/kg)", min_value=0.0),
-            "Ca_pct": st.column_config.NumberColumn("Ca (%)", min_value=0.0),
-            "P_disp_pct": st.column_config.NumberColumn("P disponível (%)", min_value=0.0),
-            "Inclusao_min_pct": st.column_config.NumberColumn("Inclusão mín. (%)", min_value=0.0),
-            "Inclusao_max_pct": st.column_config.NumberColumn("Inclusão máx. (%)", min_value=0.0),
-        },
-        disabled=["ID"],
-        hide_index=True,
-        key="editor_ingredientes"
-    )
-
-    if st.button("💾 Salvar alterações"):
+    if st.session_state.pop("cadastro_salvo", False):
+        st.success("Cadastro salvo nesta sessão. A formulação usará os ingredientes ativos abaixo.")
+    st.caption("Marque Ativo para usar um ingrediente. As caixas à esquerda selecionam linhas para exclusão.")
+    with st.form("form_cadastro", clear_on_submit=False):
+        edited = st.data_editor(
+            st.session_state.ingredientes,
+            use_container_width=True,
+            num_rows="dynamic",
+            column_config={
+                "ID": None,
+                "Ingrediente": st.column_config.TextColumn("Ingrediente", width="medium"),
+                "Ativo": st.column_config.CheckboxColumn("Ativo", width="small"),
+                "Preco_kg": st.column_config.NumberColumn("R$/kg", width="small", min_value=0.0, format="R$ %.2f"),
+                "PB_pct": st.column_config.NumberColumn("PB %", width="small", min_value=0.0),
+                "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small", min_value=0.0),
+                "Ca_pct": st.column_config.NumberColumn("Ca %", width="small", min_value=0.0),
+                "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small", min_value=0.0),
+                "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small", min_value=0.0),
+                "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small", min_value=0.0),
+            },
+            disabled=["ID"],
+            hide_index=True,
+            column_order=["Ingrediente", "Ativo", "Preco_kg", "PB_pct", "EM_kcal_kg", "Ca_pct", "P_disp_pct", "Inclusao_min_pct", "Inclusao_max_pct"],
+            key=f"editor_ingredientes_{st.session_state.get('cadastro_revisao', 0)}"
+        )
+    
+        salvar = st.form_submit_button("💾 Salvar alterações")
+    if salvar:
         try:
-            st.session_state.ingredientes = validar_ingredientes(edited)
+            novos_dados = validar_ingredientes(edited)
+            st.session_state.ingredientes = novos_dados.copy(deep=True)
+            st.session_state.cadastro_revisao = st.session_state.get("cadastro_revisao", 0) + 1
+            st.session_state.cadastro_salvo = True
             st.rerun()
         except (ValueError, KeyError, TypeError) as exc:
             st.error(str(exc))
@@ -335,6 +356,8 @@ with aba2:
     if st.button("Importar cadastro", disabled=arquivo is None):
         try:
             st.session_state.ingredientes = validar_ingredientes(pd.read_csv(arquivo))
+            st.session_state.cadastro_revisao = st.session_state.get("cadastro_revisao", 0) + 1
+            st.session_state.cadastro_salvo = True
             st.rerun()
         except Exception as exc:
             st.error(f"Cadastro não importado: {exc}")
