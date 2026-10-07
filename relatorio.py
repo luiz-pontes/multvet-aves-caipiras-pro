@@ -27,7 +27,7 @@ def gerar_pdf(resultado, tipo, quantidade):
     dados.append(['TOTAL', numero(resultado['ingredientes'].Inclusao_pct.sum(), 3), numero(resultado['ingredientes'].Kg_no_lote.sum(), 3), '', numero(resultado['custo_lote'])])
     def tabela(dados, larguras):
         t = Table(dados, colWidths=larguras, repeatRows=1, hAlign='LEFT')
-        t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1F4A2B')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),9),('VALIGN',(0,0),(-1,-1),'TOP'),('ALIGN',(1,1),(-1,-1),'RIGHT'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#F5F1E9')]),('BOTTOMPADDING',(0,0),(-1,-1),8),('TOPPADDING',(0,0),(-1,-1),8)]))
+        t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1F4A2B')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),9),('VALIGN',(0,0),(-1,-1),'TOP'),('ALIGN',(1,0),(-1,-1),'RIGHT'),('ALIGN',(0,0),(0,-1),'LEFT'),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#F5F1E9')]),('BOTTOMPADDING',(0,0),(-1,-1),8),('TOPPADDING',(0,0),(-1,-1),8)]))
         return t
     elementos += [tabela(dados,[185,85,85,70,98]), Spacer(1,14), Paragraph('Composição nutricional e limites',estilos['Heading2'])]
     dados=[['Nutriente','Calculado','Mínimo','Máximo']]
