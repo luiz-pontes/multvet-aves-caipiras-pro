@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import streamlit as st
 BASE = Path(__file__).resolve().parent
@@ -5,7 +6,7 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import linprog
 from validacao import validar_ingredientes
-from relatorio import gerar_pdf
+from relatorio import gerar_pdf, numero
 
 st.set_page_config(
     page_title="MultVet Aves Caipiras PRO",
@@ -76,6 +77,35 @@ if "ingredientes" not in st.session_state:
 # =========================
 # FUNÇÕES
 # =========================
+def diagnosticar_inviabilidade(df, fase):
+    """Limites individuais; não representam uma ração nutricionalmente validada."""
+    ativos = validar_ingredientes(df)
+    ativos = ativos[ativos["Ativo"] == True]
+    bounds = list(zip(ativos["Inclusao_min_pct"] / 100, ativos["Inclusao_max_pct"] / 100))
+    if sum(b[0] for b in bounds) > 1 + 1e-9:
+        return ["A soma das inclusões mínimas ultrapassa 100%."]
+    if sum(b[1] for b in bounds) < 1 - 1e-9:
+        return ["A soma das inclusões máximas não permite completar 100% da mistura."]
+    mensagens = []
+    for chave, coluna, nome, unidade in [
+        ("PB", "PB_pct", "Proteína bruta", "%"),
+        ("EM", "EM_kcal_kg", "Energia metabolizável", "kcal/kg"),
+        ("Ca", "Ca_pct", "Cálcio", "%"),
+        ("P_disp", "P_disp_pct", "Fósforo disponível", "%"),
+    ]:
+        vetor = ativos[coluna].to_numpy(dtype=float)
+        argumentos = dict(A_eq=np.ones((1, len(ativos))), b_eq=[1.0], bounds=bounds, method="highs")
+        maior = linprog(-vetor, **argumentos)
+        menor = linprog(vetor, **argumentos)
+        minimo = float(fase[chave + "_min"])
+        maximo = fase.get(chave + "_max", np.nan)
+        if maior.success and -maior.fun < minimo - 1e-7:
+            mensagens.append(f"{nome}: máximo possível de {numero(-maior.fun, 4)} {unidade}, abaixo do mínimo exigido de {numero(minimo, 4)} {unidade}.")
+        if menor.success and pd.notna(maximo) and menor.fun > float(maximo) + 1e-7:
+            mensagens.append(f"{nome}: mínimo possível de {numero(menor.fun, 4)} {unidade}, acima do máximo permitido de {numero(float(maximo), 4)} {unidade}.")
+    return mensagens or ["Os limites individuais não explicam sozinhos a inviabilidade. Há conflito entre as exigências nutricionais e os limites de inclusão quando aplicados juntos."]
+
+
 def formular(df, fase, quantidade_kg):
     try:
         df = validar_ingredientes(df)
@@ -218,12 +248,12 @@ with aba1:
         column_config={
             "Ingrediente": st.column_config.TextColumn("Ingrediente", width="medium"),
             "Preco_kg": st.column_config.NumberColumn("R$/kg", width="small", format="%.2f"),
-            "PB_pct": st.column_config.NumberColumn("PB %", width="small"),
-            "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small"),
-            "Ca_pct": st.column_config.NumberColumn("Ca %", width="small"),
-            "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small"),
-            "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small"),
-            "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small"),
+            "PB_pct": st.column_config.NumberColumn("PB %", width="small", format="%.2f"),
+            "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small", format="%.0f"),
+            "Ca_pct": st.column_config.NumberColumn("Ca %", width="small", format="%.2f"),
+            "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small", format="%.2f"),
+            "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small", format="%.2f"),
+            "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small", format="%.2f"),
         }
     )
 
@@ -231,6 +261,11 @@ with aba1:
         "Os valores nutricionais são referências. Sempre que houver análise laboratorial "
         "ou garantia do fornecedor, use os valores reais da matéria-prima."
     )
+
+    assinatura = (tipo, fase.to_json(), quantidade, dose, confirmar,
+                  st.session_state.ingredientes.to_csv(index=False))
+    if st.session_state.get("assinatura_formula") != assinatura:
+        st.session_state.pop("ultima_formula", None)
 
     if st.button("🟢 FORMULAR RAÇÃO DE CUSTO MÍNIMO", type="primary", use_container_width=True):
         if not confirmar or dose <= 0:
@@ -244,66 +279,76 @@ with aba1:
         dados_calculo.loc[mascara, ["Inclusao_min_pct", "Inclusao_max_pct"]] = dose / 10
         resultado, erro = formular(dados_calculo, fase, quantidade)
 
+        st.session_state.pop("ultima_formula", None)
         if erro:
             st.error(
                 "Não foi encontrada uma formulação que atenda simultaneamente às restrições. "
                 "Confira os dados, limites de inclusão e ingredientes disponíveis. Alterar somente preços não resolve a inviabilidade nutricional."
             )
-            st.caption(f"Detalhe técnico: {erro}")
+            if "infeasible" in erro.lower():
+                st.markdown("**O que impede esta simulação:**")
+                for mensagem in diagnosticar_inviabilidade(dados_calculo, fase):
+                    st.write("• " + mensagem)
+                st.caption("Limites calculados separadamente com os dados cadastrados e a dose informada. Não são propostas de ração. Confira a composição e a referência técnica antes de alterar os parâmetros.")
+            with st.expander("Detalhe técnico"):
+                st.caption(erro)
         else:
-            st.success("Solução matemática encontrada para os parâmetros informados.")
+            st.session_state.ultima_formula = resultado
+            st.session_state.assinatura_formula = assinatura
 
-            r = resultado
-            n = r["nutrientes"]
+    if "ultima_formula" in st.session_state:
+        st.success("Solução matemática encontrada para os parâmetros informados.")
+        r = st.session_state.ultima_formula
+        n = r["nutrientes"]
 
-            st.markdown("### 📋 Formulação")
-            tabela = r["ingredientes"][[
-                "Ingrediente", "Inclusao_pct", "Kg_no_lote", "Preco_kg", "Custo"
-            ]].copy()
-            tabela.columns = ["Ingrediente", "%", "kg", "R$/kg", "Custo"]
-            st.dataframe(
-                tabela.style.format({
-                    "%": "{:.2f}",
-                    "kg": "{:.2f}",
-                    "R$/kg": "R$ {:.2f}",
-                    "Custo": "R$ {:.2f}"
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
+        st.markdown("### 📋 Formulação")
+        tabela = r["ingredientes"][[
+            "Ingrediente", "Inclusao_pct", "Kg_no_lote", "Preco_kg", "Custo"
+        ]].copy()
+        tabela.columns = ["Ingrediente", "%", "kg", "R$/kg", "Custo"]
+        st.dataframe(
+            tabela.style.format({
+                "%": lambda v: numero(v, 3),
+                "kg": lambda v: numero(v, 3),
+                "R$/kg": lambda v: numero(v, 2),
+                "Custo": lambda v: numero(v, 2)
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
 
-            st.download_button("Baixar fórmula em CSV", tabela.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"), "formula_multvet.csv", "text/csv")
-            st.download_button("Baixar relatório em PDF para imprimir", gerar_pdf(r, tipo, quantidade), "relatorio_multvet.pdf", "application/pdf")
-            st.markdown("### 📊 Composição nutricional calculada")
+        st.download_button("Baixar fórmula em CSV", tabela.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"), "formula_multvet.csv", "text/csv")
+        st.download_button("Baixar relatório em PDF para imprimir", gerar_pdf(r, tipo, quantidade), "relatorio_multvet.pdf", "application/pdf")
+        st.markdown("### 📊 Composição nutricional calculada")
 
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Proteína Bruta", f"{n['PB']:.2f}%")
-            c2.metric("Energia Metabolizável", f"{n['EM']:,.0f} kcal/kg")
-            c3.metric("Cálcio", f"{n['Ca']:.2f}%")
-            c4.metric("Fósforo disponível", f"{n['P_disp']:.2f}%")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Proteína Bruta", f"{n['PB']:.2f}%")
+        c2.metric("Energia Metabolizável", f"{n['EM']:,.0f} kcal/kg")
+        c3.metric("Cálcio", f"{n['Ca']:.2f}%")
+        c4.metric("Fósforo disponível", f"{n['P_disp']:.2f}%")
 
-            st.markdown("### 💰 Custo")
-            c1, c2 = st.columns(2)
-            c1.metric("Custo por kg", f"R$ {r['custo_kg']:.4f}".replace(".", ","))
-            c2.metric(f"Custo do lote ({quantidade:.0f} kg)", f"R$ {r['custo_lote']:.2f}".replace(".", ","))
+        st.markdown("### 💰 Custo")
+        c1, c2 = st.columns(2)
+        c1.metric("Custo por kg", f"R$ {r['custo_kg']:.4f}".replace(".", ","))
+        c2.metric(f"Custo do lote ({quantidade:.0f} kg)", f"R$ {r['custo_lote']:.2f}".replace(".", ","))
 
-            st.markdown("### 🎯 Conferência das exigências")
-            checks = [
-                ("PB", n["PB"], float(fase["PB_min"]), "%"),
-                ("EM", n["EM"], float(fase["EM_min"]), "kcal/kg"),
-                ("Ca", n["Ca"], float(fase["Ca_min"]), "%"),
-                ("P disponível", n["P_disp"], float(fase["P_disp_min"]), "%")
-            ]
-            for nome, valor, minimo, unidade in checks:
-                if valor >= minimo - 1e-7:
-                    st.markdown(f"🟢 **{nome}:** {valor:.2f} {unidade} — mínimo {minimo:.2f} {unidade}")
-                else:
-                    st.markdown(f"🔴 **{nome}:** {valor:.2f} {unidade} — mínimo {minimo:.2f} {unidade}")
+        st.markdown("### 🎯 Conferência das exigências")
+        checks = [
+            ("PB", n["PB"], float(fase["PB_min"]), "%"),
+            ("EM", n["EM"], float(fase["EM_min"]), "kcal/kg"),
+            ("Ca", n["Ca"], float(fase["Ca_min"]), "%"),
+            ("P disponível", n["P_disp"], float(fase["P_disp_min"]), "%")
+        ]
+        for nome, valor, minimo, unidade in checks:
+            if valor >= minimo - 1e-7:
+                st.markdown(f"🟢 **{nome}:** {valor:.2f} {unidade} — mínimo {minimo:.2f} {unidade}")
+            else:
+                st.markdown(f"🔴 **{nome}:** {valor:.2f} {unidade} — mínimo {minimo:.2f} {unidade}")
 
-            st.caption(
-                "A formulação matemática busca o menor custo entre as matérias-primas ativas, "
-                "respeitando as inclusões mínima/máxima e os níveis nutricionais cadastrados."
-            )
+        st.caption(
+            "A formulação matemática busca o menor custo entre as matérias-primas ativas, "
+            "respeitando as inclusões mínima/máxima e os níveis nutricionais cadastrados."
+        )
 
 with aba2:
     st.subheader("🌾 Cadastro das minhas matérias-primas")
@@ -325,12 +370,12 @@ with aba2:
                 "Ingrediente": st.column_config.TextColumn("Ingrediente", width="medium"),
                 "Ativo": st.column_config.CheckboxColumn("Ativo", width="small"),
                 "Preco_kg": st.column_config.NumberColumn("R$/kg", width="small", min_value=0.0, format="R$ %.2f"),
-                "PB_pct": st.column_config.NumberColumn("PB %", width="small", min_value=0.0),
-                "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small", min_value=0.0),
-                "Ca_pct": st.column_config.NumberColumn("Ca %", width="small", min_value=0.0),
-                "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small", min_value=0.0),
-                "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small", min_value=0.0),
-                "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small", min_value=0.0),
+                "PB_pct": st.column_config.NumberColumn("PB %", width="small", min_value=0.0, format="%.2f"),
+                "EM_kcal_kg": st.column_config.NumberColumn("EM kcal/kg", width="small", min_value=0.0, format="%.0f"),
+                "Ca_pct": st.column_config.NumberColumn("Ca %", width="small", min_value=0.0, format="%.2f"),
+                "P_disp_pct": st.column_config.NumberColumn("P disp. %", width="small", min_value=0.0, format="%.2f"),
+                "Inclusao_min_pct": st.column_config.NumberColumn("Mín. %", width="small", min_value=0.0, format="%.2f"),
+                "Inclusao_max_pct": st.column_config.NumberColumn("Máx. %", width="small", min_value=0.0, format="%.2f"),
             },
             disabled=["ID"],
             hide_index=True,
