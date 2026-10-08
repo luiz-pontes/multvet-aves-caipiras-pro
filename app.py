@@ -63,13 +63,14 @@ with aba1:
             except ValueError as exc: st.error(str(exc))
     if 'resultado_total' in st.session_state:
         r=st.session_state.resultado_total
+        for aviso in r.get('avisos',[]): st.warning(aviso)
         if r['ressalvas']: st.warning('Mistura com desvios nutricionais — requer revisão técnica antes do uso.')
         else: st.success('Solução matemática encontrada para as metas verificadas.')
         st.caption('O modelo não verifica aminoácidos, sódio, vitaminas nem todos os nutrientes de uma ração completa. Fósforo total mínimo e cálcio em intervalo não representam composição exata.')
         tabela=r['ingredientes'][['Ingrediente','Inclusao_pct','Kg_no_lote','Preco_kg','Custo']]
         st.dataframe(tabela.style.format({c:lambda v:numero(v,3) for c in tabela.columns if c!='Ingrediente'}),hide_index=True,use_container_width=True)
         def destaque(row):
-            cor='#FFE3D6' if 'Abaixo' in row.Situacao or 'Acima' in row.Situacao else '#FFF4CC' if row.Situacao=='Não verificado' else '#EAF7E2'
+            cor='#FFE3D6' if 'Abaixo' in row.Situacao or 'Acima' in row.Situacao else '#FFF4CC' if row.Situacao=='Não verificado' or 'Parcial' in row.Situacao else '#EAF7E2'
             return ['background-color: '+cor]*len(row)
         st.dataframe(r['conferencia'].style.apply(destaque,axis=1).format({c:lambda v:'Não informado' if pd.isna(v) else numero(v,4) for c in ['Min_calculado','Max_calculado','Meta_min','Meta_max']}),hide_index=True,use_container_width=True)
         st.metric('Custo por kg','R$ '+numero(r['custo_kg'],4));st.metric('Custo do lote','R$ '+numero(r['custo_lote']))
@@ -77,7 +78,7 @@ with aba1:
         st.download_button('Baixar fórmula e conferência em CSV',export.encode('utf-8-sig'),'formula_total_multvet.csv','text/csv')
         st.download_button('Baixar relatório PDF',gerar_pdf(r,tipo,fase,lote,escolhido,dose),'relatorio_total_multvet.pdf','application/pdf')
 with aba2:
-    st.write('Valores em % do ingrediente. Campo vazio significa desconhecido; zero significa contribuição zero. Preencha o fósforo TOTAL de cada matéria-prima com fonte técnica. Núcleos têm garantias do usuário; demais dados são referências herdadas.')
+    st.write('Proteína e energia ausentes somente no núcleo permitem simulação parcial: as respectivas metas ficam fora da otimização e o relatório mostra subtotais com ressalva. Valores em % do ingrediente. Campo vazio significa desconhecido; zero significa contribuição zero. Preencha o fósforo TOTAL de cada matéria-prima com fonte técnica. Núcleos têm garantias do usuário; demais dados são referências herdadas.')
     with st.form('salvar_total'):
         edit=st.data_editor(cad,num_rows='dynamic',hide_index=True,use_container_width=True,key='cad_total_'+str(st.session_state.rev_total))
         salvar=st.form_submit_button('Salvar alterações')
