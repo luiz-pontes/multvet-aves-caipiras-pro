@@ -1,0 +1,14 @@
+Ingrediente,Preco_kg,PB_pct,EM_kcal_kg,Ca_min_pct,Inclusao_min_pct,Inclusao_max_pct,Ativo,Ca_max_pct,P_total_pct,Fonte
+Milho moído,1.2,8.5,3460.0,0.02,20.0,70.0,True,0.02,,Referência herdada; conferir composição
+Sorgo,1.1,9.0,3456.0,0.2,0.0,60.0,True,0.2,,Referência herdada; conferir composição
+Farelo de soja,2.4,45.0,2440.0,0.25,10.0,40.0,True,0.25,,Referência herdada; conferir composição
+Farelo de trigo,1.2,15.0,2500.0,0.42,0.0,20.0,True,0.42,,Referência herdada; conferir composição
+Farelo de arroz,1.3,15.6,2600.0,0.52,0.0,15.0,True,0.52,,Referência herdada; conferir composição
+Óleo de soja,5.5,0.0,8740.0,0.0,0.0,8.0,True,0.0,0.0,Referência herdada; conferir composição
+Calcário calcítico,0.25,0.0,0.0,37.0,0.0,10.0,True,37.0,0.0,Referência herdada; conferir composição
+Fosfato bicálcico,4.0,0.0,0.0,23.0,0.0,4.0,True,23.0,,Referência herdada; conferir composição
+Sal comum,0.8,0.0,0.0,0.0,0.2,0.6,True,0.0,0.0,Referência herdada; conferir composição
+Núcleo Inicial Corte,6.5,,,13.0,5.0,5.0,False,20.0,6.5,Garantias por kg informadas por Luiz; P total mínimo
+Núcleo Engorda Corte,6.5,,,12.0,5.0,5.0,False,18.0,6.0,Garantias por kg informadas por Luiz; P total mínimo
+Núcleo Abate Corte,6.5,,,10.0,4.0,4.0,False,18.0,5.0,Garantias por kg informadas por Luiz; P total mínimo
+Núcleo Postura,7.25,,,20.0,5.0,5.0,False,30.0,7.5,Garantias por kg informadas por Luiz; P total mínimo
