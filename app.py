@@ -52,6 +52,8 @@ with aba1:
             limitar=b.checkbox('Definir máximo',value=tipo=='Postura' and k+'_max' in padrao,key='maxon_'+k+'_'+chave_meta)
             maximo=b.number_input('Máximo'+(' (kcal/kg)' if k=='EM' else ' (%)'),min_value=0.,value=float(padrao.get(k+'_max',padrao.get(k+'_min',0.))),key='max_'+k+'_'+chave_meta)
             metas[k]=(minimo if usar else None,maximo if usar and limitar else None)
+            if k=='Ca' and usar and not limitar:
+                st.warning('Somente o mínimo de cálcio será verificado. O resultado ficará amarelo: excesso não avaliado. A fonte usada não define um limite máximo; informe-o após revisão técnica. O máximo será comparado ao limite superior calculado das garantias dos ingredientes.')
     st.caption('Postura: PB na faixa da fonte; EM e Ca usados como mínimos de cálculo, editáveis. Corte: referências herdadas, pendentes de revisão. Desvios relativos têm pesos iguais no modo aproximado; o custo é minimizado depois dos desvios.')
     modo=st.radio('Modo de cálculo',['Atender às metas','Buscar alternativa com ressalvas'])
     dados=cad.copy()
@@ -84,7 +86,10 @@ with aba1:
                 r=calcular(dados,metas,lote,modo=='Buscar alternativa com ressalvas')
                 if tipo=='Postura':
                     r['avisos'].append(FONTE_POSTURA+' Metas editáveis: confira os valores da tabela de conferência. EM e Ca usados como mínimos de cálculo.')
-                r['avisos'].append(AVISO_FOSFORO)
+                if metas['Ca'][0] is not None and metas['Ca'][1] is None:
+                    r['avisos'].append('Cálcio: somente a meta mínima foi verificada; excesso não avaliado. O intervalo calculado usa os mínimos e máximos cadastrados. Defina um limite máximo após revisão técnica para verificar ambos os limites.')
+                p_calculado=r['conferencia'].loc[r['conferencia'].Nutriente=='Fósforo total','Min_calculado'].iloc[0]
+                r['avisos'].append(AVISO_FOSFORO if pd.notna(p_calculado) else 'Fósforo total não calculado integralmente: faltam dados de ingredientes utilizados. Atendimento à exigência de fósforo disponível não avaliado.')
                 if metas['P_total']==(None,None):
                     r['conferencia'].loc[r['conferencia'].Nutriente=='Fósforo total','Situacao']='Não verificado — fósforo disponível não avaliado'
                 if criterios_nucleo:

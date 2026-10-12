@@ -66,5 +66,7 @@ def calcular(df, metas, lote, aproximada=False):
         if lo is not None and low is not None and low<lo-1e-6: deviations.append('Abaixo do mínimo por '+f'{lo-low:.4f}')
         if hi is not None and high is not None and high>hi+1e-6: deviations.append('Acima do máximo por '+f'{high-hi:.4f}')
         status=('Parcial — contribuição do núcleo não informada; meta não verificada' if k in parciais and d.loc[used,col].isna().any() else '; '.join(deviations)) or ('Não verificado' if low is None or high is None or (lo is None and hi is None) else 'Dentro das metas')
+        if k=='Ca' and status=='Dentro das metas' and hi is None:
+            status='Parcial — mínimo atendido; máximo não avaliado'
         checks.append(dict(Nutriente=label,Min_calculado=low,Max_calculado=high,Meta_min=lo,Meta_max=hi,Situacao=status))
     return dict(ingredientes=output.loc[used].copy(),conferencia=pd.DataFrame(checks),custo_kg=float(x@cost),custo_lote=float(x@cost*lote),ressalvas=relaxed,avisos=[NUTRIENTES[k][1]+": subtotal dos ingredientes com dados; contribuição de "+nome+" não contabilizada. A meta foi retirada da otimização e não está verificada." for k,nome in parciais.items()])
