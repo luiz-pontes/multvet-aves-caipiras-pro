@@ -4,6 +4,14 @@ import streamlit as st
 from motor import calcular, validar, NUTRIENTES
 from relatorio_total import gerar_pdf, numero
 BASE=Path(__file__).resolve().parent
+FONTE_POSTURA='Embrapa 051 — Recomendações para o sistema de produção com poedeiras livres de gaiola para o Estado do Paraná, Anexo 7, p. 30.'
+METAS_POSTURA={
+    'Pré-postura (16–21 semanas)': {'PB_min':16.,'PB_max':18.,'EM_min':2800.,'Ca_min':3.70},
+    'Produção I (22–37 semanas)': {'PB_min':15.,'PB_max':15.5,'EM_min':2750.,'Ca_min':3.90},
+    'Produção II (38–65 semanas)': {'PB_min':15.,'PB_max':15.5,'EM_min':2750.,'Ca_min':3.80},
+    'Produção III (acima de 65 semanas)': {'PB_min':15.,'EM_min':2750.,'Ca_min':3.85},
+}
+AVISO_FOSFORO='Fósforo total calculado com os dados cadastrados; atendimento à exigência de fósforo disponível não avaliado.'
 st.set_page_config(page_title='MultVet Aves Caipiras PRO',page_icon='🐔',layout='wide')
 st.markdown('<style>.stApp{background:#E8DCC8} h1,h2,h3{color:#1F4A2B}</style>',unsafe_allow_html=True)
 st.title('🐔 MultVet Aves Caipiras PRO')
@@ -16,11 +24,11 @@ cad=st.session_state.cadastro_total_v1
 aba1,aba2,aba3=st.tabs(['Formular ração','Minhas matérias-primas','Orientações'])
 with aba1:
     tipo=st.radio('Finalidade',['Corte','Postura'],horizontal=True)
-    fases=['Pré-inicial','Inicial','Crescimento/Engorda','Final/Abate'] if tipo=='Corte' else ['Pré-postura','Postura pico','Postura I','Postura II']
+    fases=['Pré-inicial','Inicial','Crescimento/Engorda','Final/Abate'] if tipo=='Corte' else list(METAS_POSTURA)
     fase=st.selectbox('Fase',fases)
     if tipo=='Postura':
-        st.info('Pré-postura: antes da produção; Postura pico: início até o pico; Postura I: após o pico até 50 semanas; Postura II: depois de 50 semanas. Considere também a produção do lote. Metas devem ser definidas pelo responsável técnico.')
-        st.markdown('[Referência: Embrapa 051, Anexo 7](https://www.infoteca.cnptia.embrapa.br/infoteca/bitstream/doc/1154157/1/Recomendacoes-para-o-sistema-de-producao-com-poedeiras.pdf). A fonte usa outras faixas de idade e fósforo disponível; não fornece equivalência automática para nossas quatro fases ou para fósforo total.')
+        st.info('Fases e referências nutricionais da Embrapa 051 por idade. Avalie também consumo de ração, produção e condição do lote. Metas editáveis para revisão técnica.')
+        st.markdown('[Referência: Embrapa 051, Anexo 7, página 30](https://www.infoteca.cnptia.embrapa.br/infoteca/bitstream/doc/1154157/1/Recomendacoes-para-o-sistema-de-producao-com-poedeiras.pdf). A referência informa fósforo disponível; esse valor não é usado como meta de fósforo total.')
     nucleos=cad[cad.Ingrediente.str.contains('núcleo',case=False,na=False)]
     escolhido=st.selectbox('Núcleo para esta simulação',nucleos.Ingrediente.tolist(),index=nucleos.Ingrediente.tolist().index('Núcleo Postura') if tipo=='Postura' and 'Núcleo Postura' in nucleos.Ingrediente.tolist() else 0,key='nucleo_'+tipo) if len(nucleos) else None
     dose_padrao={'Núcleo Inicial Corte':50.,'Núcleo Engorda Corte':50.,'Núcleo Abate Corte':40.,'Núcleo Postura':50.}
@@ -33,17 +41,18 @@ with aba1:
     st.info('Não usamos as antigas metas de fósforo disponível como fósforo total. Defina metas com a mesma base dos ingredientes. Desmarcar uma meta deixa seu atendimento não verificado.')
     ref=pd.read_csv(BASE/'data/fases_corte.csv')
     linha=ref[ref.Fase==fase]
-    padrao=linha.iloc[0] if len(linha) else {'PB_min':0.,'EM_min':0.,'Ca_min':0.}
+    padrao=METAS_POSTURA[fase] if tipo=='Postura' else linha.iloc[0] if len(linha) else {'PB_min':0.,'EM_min':0.,'Ca_min':0.}
+    chave_meta=tipo+'_'+fase+'_embrapa_v2'
     metas={}
     for k,(col,label) in NUTRIENTES.items():
         with st.expander(label,expanded=True):
-            usar=st.checkbox('Verificar '+label,value=k in ['PB','EM'],key='usar_'+k+'_'+fase)
+            usar=st.checkbox('Verificar '+label,value=k in ['PB','EM'] or (tipo=='Postura' and k=='Ca'),key='usar_'+k+'_'+chave_meta)
             a,b=st.columns(2)
-            minimo=a.number_input('Mínimo'+(' (kcal/kg)' if k=='EM' else ' (%)'),min_value=0.,value=float(padrao.get(k+'_min',0.)),key='min_'+k+'_'+fase)
-            limitar=b.checkbox('Definir máximo',key='maxon_'+k+'_'+fase)
-            maximo=b.number_input('Máximo'+(' (kcal/kg)' if k=='EM' else ' (%)'),min_value=0.,value=float(padrao.get(k+'_min',0.)),key='max_'+k+'_'+fase)
+            minimo=a.number_input('Mínimo'+(' (kcal/kg)' if k=='EM' else ' (%)'),min_value=0.,value=float(padrao.get(k+'_min',0.)),key='min_'+k+'_'+chave_meta)
+            limitar=b.checkbox('Definir máximo',value=tipo=='Postura' and k+'_max' in padrao,key='maxon_'+k+'_'+chave_meta)
+            maximo=b.number_input('Máximo'+(' (kcal/kg)' if k=='EM' else ' (%)'),min_value=0.,value=float(padrao.get(k+'_max',padrao.get(k+'_min',0.))),key='max_'+k+'_'+chave_meta)
             metas[k]=(minimo if usar else None,maximo if usar and limitar else None)
-    st.caption('Valores iniciais de PB, EM e Ca são referências herdadas, pendentes de revisão. Não são novas recomendações. Desvios relativos têm pesos iguais no modo aproximado; o custo é minimizado depois dos desvios.')
+    st.caption('Postura: PB na faixa da fonte; EM e Ca usados como mínimos de cálculo, editáveis. Corte: referências herdadas, pendentes de revisão. Desvios relativos têm pesos iguais no modo aproximado; o custo é minimizado depois dos desvios.')
     modo=st.radio('Modo de cálculo',['Atender às metas','Buscar alternativa com ressalvas'])
     dados=cad.copy()
     criterios_nucleo=[]
@@ -73,6 +82,11 @@ with aba1:
         else:
             try:
                 r=calcular(dados,metas,lote,modo=='Buscar alternativa com ressalvas')
+                if tipo=='Postura':
+                    r['avisos'].append(FONTE_POSTURA+' Metas editáveis: confira os valores da tabela de conferência. EM e Ca usados como mínimos de cálculo.')
+                r['avisos'].append(AVISO_FOSFORO)
+                if metas['P_total']==(None,None):
+                    r['conferencia'].loc[r['conferencia'].Nutriente=='Fósforo total','Situacao']='Não verificado — fósforo disponível não avaliado'
                 if criterios_nucleo:
                     r['avisos'].append('Critério de cálculo confirmado pelo usuário: '+escolhido+' tratado como núcleo vitamínico-mineral, com contribuição zero de '+', '.join(criterios_nucleo)+'. Valores não fornecidos no rótulo; metas mantidas na otimização. Este critério não se aplica a concentrados proteicos.')
                 st.session_state.resultado_total=r
@@ -87,7 +101,7 @@ with aba1:
         tabela=r['ingredientes'][['Ingrediente','Inclusao_pct','Kg_no_lote','Preco_kg','Custo']]
         st.dataframe(tabela.style.format({c:lambda v:numero(v,3) for c in tabela.columns if c!='Ingrediente'}),hide_index=True,use_container_width=True)
         def destaque(row):
-            cor='#FFE3D6' if 'Abaixo' in row.Situacao or 'Acima' in row.Situacao else '#FFF4CC' if row.Situacao=='Não verificado' or 'Parcial' in row.Situacao else '#EAF7E2'
+            cor='#FFE3D6' if 'Abaixo' in row.Situacao or 'Acima' in row.Situacao else '#FFF4CC' if 'Não verificado' in row.Situacao or 'Parcial' in row.Situacao else '#EAF7E2'
             return ['background-color: '+cor]*len(row)
         st.dataframe(r['conferencia'].style.apply(destaque,axis=1).format({c:lambda v:'Não informado' if pd.isna(v) else numero(v,4) for c in ['Min_calculado','Max_calculado','Meta_min','Meta_max']}),hide_index=True,use_container_width=True)
         st.metric('Custo por kg','R$ '+numero(r['custo_kg'],4));st.metric('Custo do lote','R$ '+numero(r['custo_lote']))

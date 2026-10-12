@@ -30,7 +30,7 @@ def gerar_pdf(r,tipo,fase,lote,nucleo,dose):
         rows.append([p(x.Nutriente),p(val),p(fmt(x.Meta_min)),p(fmt(x.Meta_max)),p(x.Situacao.replace('.',','))])
     t=table(rows,[100,115,75,75,158])
     for i,(_,x) in enumerate(r['conferencia'].iterrows(),1):
-        col='#FFE3D6' if 'Abaixo' in x.Situacao or 'Acima' in x.Situacao else '#FFF4CC' if x.Situacao=='Não verificado' or 'Parcial' in x.Situacao else '#EAF7E2'
+        col='#FFE3D6' if 'Abaixo' in x.Situacao or 'Acima' in x.Situacao else '#FFF4CC' if 'Não verificado' in x.Situacao or 'Parcial' in x.Situacao else '#EAF7E2'
         t.setStyle(TableStyle([('BACKGROUND',(0,i),(-1,i),colors.HexColor(col))]))
     elements +=[t,Spacer(1,10),p('* EM em kcal/kg; demais nutrientes em %. Cálcio: intervalo cadastrado. Fósforo total: usa os valores cadastrados, incluindo mínimos garantidos; não equivale a fósforo disponível.'),Spacer(1,8),p('Custo por kg: R$ '+numero(r['custo_kg'],4)),p('Custo do lote: R$ '+numero(r['custo_lote'])),Spacer(1,10),p('O modelo não verifica aminoácidos, sódio, vitaminas nem todos os nutrientes de uma ração completa. Dados ausentes e metas desativadas não são certificados. Fontes e garantias devem ser conferidas antes do uso produtivo. Valores arredondados apenas na apresentação.')]
     SimpleDocTemplate(buf,rightMargin=36,leftMargin=36,topMargin=36,bottomMargin=36).build(elements)
