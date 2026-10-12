@@ -23,6 +23,8 @@ with aba1:
     dose_padrao={'Núcleo Inicial Corte':50.,'Núcleo Engorda Corte':50.,'Núcleo Abate Corte':40.,'Núcleo Postura':50.}
     dose=st.number_input('Dose do núcleo (kg/tonelada)',min_value=0.,max_value=1000.,value=dose_padrao.get(escolhido,0.),key='dose_'+str(escolhido))
     st.caption('Somente o núcleo selecionado entra no cálculo. Confira sua adequação à fase e a dose do rótulo.')
+    nucleo_mineral=st.checkbox('Este produto é um núcleo vitamínico-mineral: considerar PB e EM iguais a zero quando não informadas.',value=True)
+    st.caption('Critério de cálculo confirmado pelo usuário. Para concentrado proteico, desmarque e cadastre sua composição própria. Valores informados são preservados.')
     lote=st.number_input('Quantidade do lote (kg)',min_value=1.,value=100.,step=25.)
     st.markdown('### Metas nutricionais')
     st.info('Não usamos as antigas metas de fósforo disponível como fósforo total. Defina metas com a mesma base dos ingredientes. Desmarcar uma meta deixa seu atendimento não verificado.')
@@ -41,16 +43,24 @@ with aba1:
     st.caption('Valores iniciais de PB, EM e Ca são referências herdadas, pendentes de revisão. Não são novas recomendações. Desvios relativos têm pesos iguais no modo aproximado; o custo é minimizado depois dos desvios.')
     modo=st.radio('Modo de cálculo',['Atender às metas','Buscar alternativa com ressalvas'])
     dados=cad.copy()
+    criterios_nucleo=[]
     mask=dados.Ingrediente.str.contains('núcleo',case=False,na=False)
     dados.loc[mask,'Ativo']=False
     if escolhido:
         sel=dados.Ingrediente==escolhido
         dados.loc[sel,'Ativo']=True
         dados.loc[sel,['Inclusao_min_pct','Inclusao_max_pct']]=dose/10
+        if nucleo_mineral:
+            for coluna,nome in [('PB_pct','proteína bruta'),('EM_kcal_kg','energia metabolizável')]:
+                ausente=sel & dados[coluna].isna()
+                if ausente.any():
+                    dados.loc[ausente,coluna]=0.0
+                    criterios_nucleo.append(nome)
+        if criterios_nucleo: st.info('Critério adotado: contribuição zero de '+', '.join(criterios_nucleo)+' do núcleo. As metas continuam ativas; o cadastro original permanece sem alteração.')
     st.markdown('### Ingredientes disponíveis para esta simulação')
     st.dataframe(dados[dados.Ativo],hide_index=True,use_container_width=True)
     confirmar=st.checkbox('Conferi as composições, a base total dos minerais, o núcleo e os parâmetros desta simulação.')
-    assinatura=(dados.to_csv(index=False),str(metas),tipo,fase,lote,dose,modo,confirmar)
+    assinatura=(dados.to_csv(index=False),str(metas),tipo,fase,lote,dose,modo,confirmar,nucleo_mineral)
     if st.session_state.get('assinatura_total')!=assinatura: st.session_state.pop('resultado_total',None)
     if st.button('FORMULAR',type='primary'):
         st.session_state.pop('resultado_total',None)
@@ -58,6 +68,8 @@ with aba1:
         else:
             try:
                 r=calcular(dados,metas,lote,modo=='Buscar alternativa com ressalvas')
+                if criterios_nucleo:
+                    r['avisos'].append('Critério de cálculo confirmado pelo usuário: '+escolhido+' tratado como núcleo vitamínico-mineral, com contribuição zero de '+', '.join(criterios_nucleo)+'. Valores não fornecidos no rótulo; metas mantidas na otimização. Este critério não se aplica a concentrados proteicos.')
                 st.session_state.resultado_total=r
                 st.session_state.assinatura_total=assinatura
             except ValueError as exc: st.error(str(exc))
