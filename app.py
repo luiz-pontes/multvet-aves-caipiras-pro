@@ -16,10 +16,13 @@ cad=st.session_state.cadastro_total_v1
 aba1,aba2,aba3=st.tabs(['Formular ração','Minhas matérias-primas','Orientações'])
 with aba1:
     tipo=st.radio('Finalidade',['Corte','Postura'],horizontal=True)
-    fases=['Pré-inicial','Inicial','Crescimento/Engorda','Final/Abate'] if tipo=='Corte' else ['Postura']
+    fases=['Pré-inicial','Inicial','Crescimento/Engorda','Final/Abate'] if tipo=='Corte' else ['Pré-postura','Postura pico','Postura I','Postura II']
     fase=st.selectbox('Fase',fases)
+    if tipo=='Postura':
+        st.info('Pré-postura: antes da produção; Postura pico: início até o pico; Postura I: após o pico até 50 semanas; Postura II: depois de 50 semanas. Considere também a produção do lote. Metas devem ser definidas pelo responsável técnico.')
+        st.markdown('[Referência: Embrapa 051, Anexo 7](https://www.infoteca.cnptia.embrapa.br/infoteca/bitstream/doc/1154157/1/Recomendacoes-para-o-sistema-de-producao-com-poedeiras.pdf). A fonte usa outras faixas de idade e fósforo disponível; não fornece equivalência automática para nossas quatro fases ou para fósforo total.')
     nucleos=cad[cad.Ingrediente.str.contains('núcleo',case=False,na=False)]
-    escolhido=st.selectbox('Núcleo para esta simulação',nucleos.Ingrediente.tolist()) if len(nucleos) else None
+    escolhido=st.selectbox('Núcleo para esta simulação',nucleos.Ingrediente.tolist(),index=nucleos.Ingrediente.tolist().index('Núcleo Postura') if tipo=='Postura' and 'Núcleo Postura' in nucleos.Ingrediente.tolist() else 0,key='nucleo_'+tipo) if len(nucleos) else None
     dose_padrao={'Núcleo Inicial Corte':50.,'Núcleo Engorda Corte':50.,'Núcleo Abate Corte':40.,'Núcleo Postura':50.}
     dose=st.number_input('Dose do núcleo (kg/tonelada)',min_value=0.,max_value=1000.,value=dose_padrao.get(escolhido,0.),key='dose_'+str(escolhido))
     st.caption('Somente o núcleo selecionado entra no cálculo. Confira sua adequação à fase e a dose do rótulo.')
@@ -65,6 +68,8 @@ with aba1:
     if st.button('FORMULAR',type='primary'):
         st.session_state.pop('resultado_total',None)
         if not confirmar or not escolhido or dose<=0: st.error('Confira os dados e informe um núcleo com dose positiva.')
+        elif any(lo is not None and lo<=0 for lo,hi in metas.values()):
+            st.error('Informe um mínimo positivo para cada meta marcada ou desmarque sua verificação. Zero não representa uma exigência nutricional válida.')
         else:
             try:
                 r=calcular(dados,metas,lote,modo=='Buscar alternativa com ressalvas')
